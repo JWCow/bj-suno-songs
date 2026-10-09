@@ -63,14 +63,17 @@ def fetch_clip_metadata(clip_id, original_url=""):
     mins = int(duration_sec // 60)
     secs = int(duration_sec % 60)
 
-    # Extract best progressive streamable audio URL
-    audio_url = ""
-    for item in clip_data.get("media_urls", []) or []:
-        if item.get("url"):
-            audio_url = item["url"]
-            break
-
-    # If media_urls didn't contain url, check audio_url
+    # Extract progressive streamable audio URL.
+    # Note: Suno's media_urls contains 'm4a-opus' with custom encoding which native HTML5 audio cannot decode in browsers.
+    # The direct CDN MP4 container (https://cdn1.suno.ai/{clip_id}.mp4) has standard AAC audio track, open CORS (*),
+    # and plays natively across all desktop and mobile browsers.
+    video_url = clip_data.get("video_url") or f"https://cdn1.suno.ai/{clip_id}.mp4"
+    audio_url = video_url
+    if not audio_url:
+        for item in clip_data.get("media_urls", []) or []:
+            if item.get("url"):
+                audio_url = item["url"]
+                break
     if not audio_url:
         cand = clip_data.get("audio_url", "")
         if cand and "forbidden" not in cand:
@@ -211,6 +214,9 @@ def main():
             if clip_id in existing_map and existing_map[clip_id].get("audio_url"):
                 song = existing_map[clip_id]
                 song["artist"] = args.artist
+                # Automatically upgrade any obsolete m4a-opus streams to MP4
+                if song.get("audio_url", "").endswith(".m4a") or "cloudfront.net" in song.get("audio_url", ""):
+                    song["audio_url"] = song.get("video_url") or f"https://cdn1.suno.ai/{clip_id}.mp4"
                 print(f"   ✓ [Cached] '{song['title']}' ({song.get('duration_formatted', '')})")
             else:
                 song = fetch_clip_metadata(clip_id, original_url=u)

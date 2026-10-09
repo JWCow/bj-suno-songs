@@ -190,7 +190,7 @@
               </div>
             </div>
             <div class="card-body">
-              <h3 class="card-title" title="${s.title}">${s.title}</h3>
+              <h3 class="card-title" title="${s.title}" onclick="window.playerApp.playById('${s.id}')" style="cursor: pointer;">${s.title}</h3>
               <div class="card-tags" title="${s.tags}">${s.tags || 'Suno AI Original'}</div>
               <p class="card-hook" title="${s.hook}">“${s.hook || 'Original lyrics and prompt'}”</p>
               <div class="card-footer">
@@ -246,19 +246,31 @@
     currentTrackIndex = index;
     const track = songs[currentTrackIndex];
 
-    if (!track.audio_url) {
+    let streamUrl = track.audio_url || track.video_url;
+    // Automatic fallback if streamUrl is an incompatible CloudFront m4a-opus link
+    if (streamUrl && streamUrl.includes('cloudfront.net') && streamUrl.endsWith('.m4a')) {
+      streamUrl = track.video_url || `https://cdn1.suno.ai/${track.id}.mp4`;
+    }
+
+    if (!streamUrl) {
       alert('Audio stream not available for this track.');
       return;
     }
 
-    audio.src = track.audio_url;
-    audio.play().then(() => {
-      isPlaying = true;
-      updatePlayerUI();
-      updateMediaSession();
-      renderSongs();
-    }).catch((err) => {
+    // Immediately update player metadata and track styling
+    updatePlayerUI();
+    renderSongs();
+
+    if (audio.src !== streamUrl) {
+      audio.src = streamUrl;
+    }
+
+    audio.play().catch((err) => {
+      if (err.name === 'AbortError') return;
       console.warn('Playback error:', err);
+      isPlaying = false;
+      updatePlayerUI();
+      renderSongs();
     });
   }
 
@@ -269,16 +281,12 @@
     }
 
     if (audio.paused) {
-      audio.play().then(() => {
-        isPlaying = true;
-        updatePlayerUI();
-        renderSongs();
+      audio.play().catch((err) => {
+        if (err.name === 'AbortError') return;
+        console.warn('Playback error:', err);
       });
     } else {
       audio.pause();
-      isPlaying = false;
-      updatePlayerUI();
-      renderSongs();
     }
   }
 
@@ -323,6 +331,19 @@
   }
 
   // Audio Event Listeners
+  audio.addEventListener('play', () => {
+    isPlaying = true;
+    updatePlayerUI();
+    renderSongs();
+    updateMediaSession();
+  });
+
+  audio.addEventListener('pause', () => {
+    isPlaying = false;
+    updatePlayerUI();
+    renderSongs();
+  });
+
   audio.addEventListener('timeupdate', () => {
     if (!audio.duration) return;
     const pct = (audio.currentTime / audio.duration) * 100;
