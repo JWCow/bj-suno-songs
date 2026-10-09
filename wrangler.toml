@@ -1,8 +1,12 @@
 name = "bj-suno-songs"
 compatibility_date = "2026-10-09"
-pages_build_output_dir = "./public"
+workers_dev = true
 
-# If using Cloudflare Workers static assets routing
 [assets]
 directory = "./public"
 not_found_handling = "single-page-application"
+
+# Custom Domain routing — automatically binds bjsunosongs.mastern8n.cc on deploy
+routes = [
+  { pattern = "bjsunosongs.mastern8n.cc", custom_domain = true }
+]
